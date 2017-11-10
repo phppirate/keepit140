@@ -71,9 +71,11 @@
                     Keep It 140
                 </div>
 
-                <div class="links">
-                    <a href="{{ route('twitter.login') }}">Log in</a>
-                </div>
+                Dashboard!
+
+                @foreach ($tweets as $tweet)
+                    &bull; {{ print_r($tweet) }} <br>
+                @endforeach
             </div>
         </div>
     </body>
