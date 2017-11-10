@@ -45,7 +45,7 @@ Route::get('login', function () {
 })->name('login')->middleware('guest');
 
 Route::get('dashboard', function () {
-    $tweets = Cache::remember('tweets::user-' . auth()->id, 5, function () {
+    $tweets = Cache::remember('tweets::user-' . auth()->id(), 5, function () {
         return Twitter::getHomeTimeline(['count' => 20]);
     });
 
