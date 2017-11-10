@@ -186,3 +186,7 @@ return view('dashboard')->with('tweets', $tweets);
 
 
 10:09pm: wife is home from rehearsal, done for the night
+
+7:07am: let's goooooo... pull in tailwind to format our tweet timeline
+7:07am: for now just gonna use the external css. faster this way for now. Means we'll actually have to create a shared layout... 
+7:11am: annnnd my daughter is awake. done for now.
