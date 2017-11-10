@@ -45,12 +45,37 @@ Route::get('login', function () {
 })->name('login')->middleware('guest');
 
 Route::get('dashboard', function () {
+    $friends = Cache::remember('friends::user-' . auth()->id(), 15, function () {
+        // @todo: handle pagination; this is only the first 20
+        return Twitter::getFriends()->users;
+    });
+
+    $offenders = collect($friends)->map(function ($friend) {
+        Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
+
+        $tweets = Cache::remember('tweets::profile_id-' . $friend->id, 60, function () use ($friend) {
+            return Twitter::getUserTimeline(['user_id' => $friend->id]);
+        });
+
+        $friend->offenses = collect($tweets)->filter(function ($tweet) {
+            return strlen($tweet->text) > 140;
+        })->count();
+
+        return $friend;
+    })->filter(function ($friend) {
+        return $friend->offenses > 0;
+    })->sortByDesc('offenses');
+
+    return view('dashboard')->with('offenders', $offenders);
+})->name('dashboard')->middleware('auth');
+
+Route::get('tweets', function () {
     $tweets = Cache::remember('tweets::user-' . auth()->id(), 5, function () {
         return Twitter::getHomeTimeline(['count' => 20]);
     });
 
-    return view('dashboard')->with('tweets', $tweets);
-})->name('dashboard')->middleware('auth');
+    return view('tweets')->with('tweets', $tweets);
+})->name('tweets')->middleware('auth');
 
 Route::get('twitter/callback', ['as' => 'twitter.callback', function () {
     // You should set this route on your Twitter Application settings as the callback

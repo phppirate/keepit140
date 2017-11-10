@@ -9,8 +9,18 @@
 
         <link href="https://cdn.jsdelivr.net/npm/tailwindcss/dist/tailwind.min.css" rel="stylesheet">
     </head>
-    <body>
-        <div class="">
+    <body class="pb-12">
+        <header class="container px-4 mx-auto pb-6 pt-2">
+            <div class="row border-b border-grey">
+                <div class="py-6 flex-y-center justify-between">
+                    <a href="/" class="flex-y-center">
+                        Keep It 140
+                    </a>
+                </div>
+            </div>
+        </header>
+
+        <div class="container px-4 mx-auto pt-4 content">
             @yield('content')
         </div>
     </body>

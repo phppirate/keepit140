@@ -190,3 +190,222 @@ return view('dashboard')->with('tweets', $tweets);
 7:07am: let's goooooo... pull in tailwind to format our tweet timeline
 7:07am: for now just gonna use the external css. faster this way for now. Means we'll actually have to create a shared layout... 
 7:11am: annnnd my daughter is awake. done for now.
+8:19am: both kids watching nature cat until 8:30am LETS GOOOOO
+8:20am: ok I want a super quick start based app layout. let's see if there's one on the tailwind page.
+ Send this message to the tailwind guys: "Tailwind needs this: 'Copy this HTML and you'll have a base layout with top nav and a responsive hamburger nav and a healthy constrained content section with a white background and a grey page background and a footer'"
+8:22am: Give up and copy the base from my blog
+8:27am: realize I've spent 5 minutes talking over this idea with the tailwind guys instead of working on my app. pause and PR it.
+10:04am: Back at it sonnnnnnnnn
+10:04am: First thing is to get the timeline to look good. that one guy on twitter said he built the whole twitter layout in tailwind in 2 hours. what can i do in 15 minutes? Oh crap just realized a decent client is going to have to handle embedded images, like buttons, rt's etc..... this was a terrible idea. Let's pause and move to the "your friends who are tweeting 140+ too often". :/ sad, because getting that set up is going to be more worrisome and trying architecturally.
+10:06am: OK, for now, let's at least grab all my followers and grab all their recent tweets and see if that hits any limits. For each (my followers as followers) get recent tweets  foreach tweet if count > 140 (add to this person's offense count)... going to do it in a view for now.
+
+
+Wrote this pseudo code:
+
+```php
+$following = Cache::remember('followees::user-' . auth()->id(), 5, function () {
+    return Twitter::getFollowing();
+});
+
+$offenders = [];
+
+foreach ($following as $followee) {
+    // @todo do this as a collection thingy
+    $offenses = 0;
+
+    foreach ($followee->tweets() as $tweet) {
+        if (strlen($tweet->body) > 140) {
+            $offenses++;
+        }
+    }
+
+    $offenders[$followee->id] = $offenses;
+}
+```
+
+10:11am: Let's turn this into actual code...
+
+OK, thujohn calls it 'getFriends()'. I like that better than followee. Also realized i should cache each user's tweets. OK, but what am I actually getting back? What is this friend object? Let's do a dd.
+
+10:16am:.. ok we have an array called "users" and then cursor information, which I assume is how twitter handles pagination. We'll have to see what facility there is to walk down the pagination lane. First, let's look at a user.
+
+stdClass object. Crap. No facility like getTweets. Let's cache a bit of their info so that we can use some of the "get IDs" calls later instead of always having to pull the full user.
+
+```php
+foreach ($friends as $friend) {
+    Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
+
+    $tweets = Cache::remember('tweets::profile_id-' . $friend->id, 60, function () use ($friend) {
+        return Twitter::getUserTimeline(['user_id' => $friend->id]);
+    });
+
+    foreach ($tweets as $tweet) {
+        dd($tweet);
+    }
+}
+```
+10:20am: called away for work
+10:29am: back. Let's see what we're getting on each of those tweets.
+
+Right now, we just care about length. So, let's take a look at "text" length.
+
+Here's what we have right now:
+
+```php
+$friends = Cache::remember('friends::user-' . auth()->id(), 15, function () {
+    // @todo: handle pagination; this is only the first 20
+    return Twitter::getFriends()->users;
+});
+
+$offenders = [];
+
+foreach ($friends as $friend) {
+    // @todo do this as a collection reduce or contains or whatever thingy
+    $offenses = 0;
+
+    Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
+
+    $tweets = Cache::remember('tweets::profile_id-' . $friend->id, 60, function () use ($friend) {
+        return Twitter::getUserTimeline(['user_id' => $friend->id]);
+    });
+
+    foreach ($tweets as $tweet) {
+        if (strlen($tweet->text) > 140) {
+            $offenses++;
+        }
+    }
+
+    $offenders[$friend->id] = $offenses;
+}
+
+dd("OFFENDERS:", $offenders);
+```
+
+
+10:37am: tested it out and it's good!
+
+```
+"OFFENDERS:"
+array:20 [▼
+  122812713 => 2
+  14074644 => 7
+  33955538 => 1, 
+  ...
+]
+```
+
+10:38am: Let's filter out the zeros, and then pass them to the view and show our offenders. Haircut at 11am CAN WE DO IT IN TIME
+
+First collection refactor... map and filter...
+```php
+$offenders = collect($friends)->map(function ($friend) {
+    $friend->offenses = 0;
+
+    Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
+
+    $tweets = Cache::remember('tweets::profile_id-' . $friend->id, 60, function () use ($friend) {
+        return Twitter::getUserTimeline(['user_id' => $friend->id]);
+    });
+
+    foreach ($tweets as $tweet) {
+        if (strlen($tweet->text) > 140) {
+            $friend->offenses++;
+        }
+    }
+
+    return $friend;
+})->filter(function ($friend) {
+    return $friend->offenses > 0;
+});
+```
+
+Collection refactor 2:
+
+```php
+$offenders = collect($friends)->map(function ($friend) {
+    Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
+
+    $tweets = Cache::remember('tweets::profile_id-' . $friend->id, 60, function () use ($friend) {
+        return Twitter::getUserTimeline(['user_id' => $friend->id]);
+    });
+
+    $friend->offenses = collect($tweets)->filter(function ($tweet) {
+        return strlen($tweet->text) > 140;
+    })->count();
+
+    return $friend;
+})->filter(function ($friend) {
+    return $friend->offenses > 0;
+})->sortByDesc('offenses');
+
+return view('dashboard')->with('offenders', $offenders);
+```
+
+10:45am: OK, let's make this a view. Rename dashboard.blade.php to tweets.blade.php and let's make it show the offenders.
+
+```
+@foreach ($offenders as $offender)
+<div class="my-2 py-2 border-b border-grey">
+    &bull; <pre>{{ print_r($offender) }}</pre>
+</div>
+@endforeach
+```
+
+OK, what am I useing for a reference? Where do I see a list of users.. maybe lists?
+
+Here we go:
+
+https://twitter.com/stauffermatt/lists/gainesville-fl-emerg-info/members
+
+Let's build that super quick. Fields we need are:
+
+- profile pic $offender->profile_image_url_https
+- url $offender->url
+- long name $offender->name
+- short name $offender->screen_name
+- bio $offender->description
+- follow button (skip for now)
+
+```
+@foreach ($offenders as $offender)
+<div class="my-2 py-2 border-b border-grey">
+    <img src="{{ $offender->profile_image_url_https }}">
+    <a href="{{ $offender->url }}">
+        <span class="font-bold">{{ $offender->name }}</span>
+        <span class="color-grey">{{ $offender->screen_name }}</span>
+    </a>
+    <div>
+        {{ $offender->description }}
+    </div>
+    <a href="#">
+        Follow / Unfollow (@todo)
+    </a>
+</div>
+@endforeach
+```
+
+10:51am: This could look worse! Let's round it and then i gotta run. `.rounded-full` on the image.
+
+Launching this then gotta run
+
+```
+<p>Of your 20 first returned friends, the worst offenders within their last 20 (i think) tweets</p>
+
+@foreach ($offenders as $offender)
+<div class="my-2 py-2 border-b border-grey">
+    <img src="{{ $offender->profile_image_url_https }}" class="rounded-full">
+    <a href="{{ $offender->url }}">
+        <span class="font-bold">{{ $offender->name }}</span>
+        <span class="color-grey">{{ $offender->screen_name }}</span>
+    </a>
+    <div>
+        {{ $offender->description }}
+    </div>
+    <div class="font-bold text-lg mt-2">
+        Offenses in the last 20 tweets: {{ $offender->offenses }}
+    </div>
+</div>
+@endforeach
+```
+
+10:54am: I THINK it's 20 users 20 tweets but i actually don't remember. Let's go! commit push and run.
