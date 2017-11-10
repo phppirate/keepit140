@@ -1,0 +1,188 @@
+8:15pm: lambo keepit140
+8:16pm: forge add keepit140.com
+8:16pm: hover point keepit140.com to forge IP address
+8:18pm: new github repo
+8:19pm: add github repo to forge and set up auto deploy
+8:20pm: set up database and run first migration
+8:21pm: it's alive!: http://keepit140.com/
+8:21pm: create new twitter app for local dev
+8:25pm: find, and pull, thujohn/twitter
+8:26pm: modify .env.example and .env while composer requiring
+8:27pm: configure app (env, config.app) for twitter
+8:28pm: stop and realize I need to spec out what the MVP can do
+8:28pm: spec out MVP:
+
+- show me my timeline trimmed to 140 with all 140+ showing a "show more" button that expands the tweet
+- show me all my friends who commonly tweet over 140
+	- how? for starters we can pull the current timeline as far as we can get it and count how many
+	- later we can also have a cron job that runs regularly and stocks up # of tweets
+	- doesn't seem wise to say "get all tweets for every person i follow" because feels like we'll hit API caps?, but maybe i'm wrong there?
+- oh, and allow the user to auth with their twitter creds so it's not just running with mine 😳
+
+8:31pm: set out to do the key thing, which is authenticating as a given user. question: Can I get their authentication info with Laravel passport and then use it with Thujohn/Twitter?  if not, which do I use? crap.
+8:32pm: reads the thujohn/twitter docs and BOOM it's got sample routes for login BOOM BABY
+8:33pm: copy the routes and paste and see where it takes us
+8:34pm: Modify laravel's default welcome.blade.php to say "keep it 140" and have a login button that points to the default route i copied and then try it to see what breaks
+8:35pm: modify the callback URL in my twitter app because i had made it oauth/callback but this app defaults to twitter/callback which makes sense
+8:36pm: modify the copied code to PSR-2 because it's driving me bonkers
+8:36pm: in modifying that code realize I'm supposed to do some things here in this code like have an error state and save a user after successful login. set up an error state first. try to remember how to parse `->with('flash_error', 'message')` and totally forget. Google "laravel redirect with". Oh. `session('flash_error')`. ok duh
+8:38pm: back to building the error page. Realize the default code isn't actually passing the twitter error along which is busted. so modify that code so we're actually getting the error code from Twitter passed to the error page so it's debug-able.
+
+```php
+    return "<h1>ERROR WILL ROBINSON</h1><p>" . session('flash_error') . "</p><p>" . session('twitter_error') . "</p>";
+```
+8:40pm: OK now let's modify the "success" code to save the user. Probably gonna have to add some fields to the user table. Boo, the readme code doesn't tell me what I'm gonna get back, so I'll just `dd($credentials)` here and see what we get back once it works. OK! Let's test!
+8:40pm: TEST! Open up keepit140.dev... uh.. but?
+
+```
+Fatal error: Uncaught ReflectionException: Class config does not exist in /Users/mattstauffer/Sites/keepit140/vendor/laravel/framework/src/Illuminate/Container/Container.php on line 752
+```
+
+That's a new one.
+
+8:43pm: Oh, turns out I had a string in `.env` with spaces in it and forgot to surround it with quotes. OK. Let's click this "log in button!"
+8:43pm: "Authorize Keep it 140 local to use your account?" HELL YES I WILL.
+8:43pm: "Class 'Input' not found".. omg this example code is some old crap. replace all calls from Input::get to Request::input.
+8:44pm: Back. Back. Login button again. Authorize again.
+8:44pm: OH CRAP BATTERY ALMOST DEAD GET THE CHARGER BRB
+8:45pm: BOOM BABY FULL CREDENTIALS! Let's keep.... user ID, user screen_name, utc_offset, ... I guess that's it for now. Weird.. I'm expecting a token I can use for access later? No token? Oh... ok.. reading up, there's a `$token` variable. Let's dd that too and see what we get.
+8:47pm: `dd($token, $credentials)`: ... this feature is temporarily available. OK, back, back, refresh, log in, authorize, and..... OK! This `$token` variable gives me "oauth_token", "oauth_token_secret", "user_id", "screen_name", and "x_auth_expires". Obviously I want to keep all of those except auth expires. So let's go add them to our migration.
+8:49pm: php artisan make:migration add_twitter_details_to_user_table --table=users
+
+```
+$table->string("oauth_token");
+$table->string("oauth_token_secret");
+$table->string("user_id");
+$table->string("screen_name");
+```
+
+Ain't nobody got time for down migrations
+8:50pm: php artisan migrate
+oh crap I made a remote db but not local, make one local.
+8:51pm: php artisan migrate
+8:51pm: edit `User.php` and add those four fields to `fillable`
+8:52pm: holy crap my music stopped like 10 minutes ago. Let's goo.. Aphex Twin - Syro.
+8:53pm: Update our `dd($token, $credentials)` to create a user.
+
+```php
+$user = User::create([
+    'oauth_token' => $token['oauth_token'],
+    'oauth_token_secret' => $token['oauth_token_secret'],
+    'user_id' => $token['user_id'],
+    'screen_name' => $token['screen_name'],
+]);
+```
+
+8:54pm: Instead of redirecting to `/` after, let's redirect to a dashboard. for now, `/dashboard`. make a route and have it just say "welcome!" .. route closure baby
+
+```php
+Route::get('dashboard', function () {
+    return 'Welcome!';
+})->name('dashboard');
+```
+8:55pm: holy crap i'm thirsty brb
+8:56pm: OK take thirty! Back back click login
+8:56pm: "Class 'User' not found" AGHUGHUQEWHRIUWERHWEIULRHWEOREW
+8:57pm: take thirty one
+8:57pm: "SQLSTATE[HY000]: General error: 1364 Field 'name' doesn't have a default value (SQL: insert into `users` "
+DUH. php artisan make:migration remove_unnecessary_default_users_fields --table=users
+
+```php
+Schema::table('users', function (Blueprint $table) {
+    $table->dropColumn('name');
+    $table->dropColumn('email');
+    $table->dropColumn('password');
+});
+```
+
+php artisan migrate
+
+8:59pm: TAKE THIRTY THREE OR TWO OR WHATEVER
+9:00pm: Success! Wish TDD-ing web hooks were easier, because this would've taken less time if it were.
+9:00pm: Frantic brain fart. Uh. What next? OK, let's verify SQL data.
+9:01pm: Realize A) I forgot to log the user in and B) there's no logic in there for returning users and C) the dashboard isn't protected against not-logged-in users.
+9:01pm: Add `Auth::login($user)` to the return route and make the `User::create` a `firstOrCreate` and apply the `auth` middleware to the dashboard route. Also eat a lime Chobani.
+9:02pm: Realize the "redirect to on non-auth'ed access to dashboard" URL is def gonna be wrong and ignore it.
+9:03pm: Refresh dashboard. "Route [login] not defined." Duh. Let's fix that. First, let's fix App\Http\Middleware\REdirectIfAuthenticated to go to "dashboard" instead of "home" on success. This is for the "guest" middleware.
+9:05pm: I still can't remember where the logic is that says where to go and I don't wanna deal with it, but I do know the default is a route named "login" so here we go:
+
+```php
+Route::get('login', function () {
+    return '<a href="' . route('twitter.login') . ">Log in with Twitter</a>";
+})->name('login')->middleware('guest');
+```
+
+Boom.
+9:06pm: Daughter is crying. Please go back to sleep! I'm writing hacky code here!
+9:07pm: Nope. Not happening. Gonna go rock her back to sleep. BRB.
+9:56pm: UGH there goes my night. OK. Back at it. Where were we? Logins. Great! Login works now. Just realized my firstOrCreate is wrong though. Change from this:
+
+```php
+$user = User::firstOrCreate([
+    'oauth_token' => $token['oauth_token'],
+    'oauth_token_secret' => $token['oauth_token_secret'],
+    'user_id' => $token['user_id'],
+    'screen_name' => $token['screen_name'],
+]);
+```
+
+to this:  
+
+```php
+$user = User::firstOrCreate(
+    ['user_id' => $token['user_id']],
+    [
+        'oauth_token' => $token['oauth_token'],
+        'oauth_token_secret' => $token['oauth_token_secret'],
+        'user_id' => $token['user_id'],
+        'screen_name' => $token['screen_name'],
+    ]
+);
+```
+9:59pm: OK, what do we want this dashboard to do? Let's grab at least a timeline and "load more" it, that's our first goal. Thujohn: gimme my timeline!
+
+```php
+return view('dashboard')
+        ->with('tweets', Twitter::getHomeTimeline(['count' => 20]));
+```
+Let's make dashboard.blade.php and have it iterate over that tweets object:  
+
+```php
+@foreach ($tweets as $tweet)
+    &bull; {{ print_r($tweet) }} <br>
+@endforeach
+```
+
+10:04pm: OMG i forgot how much data came back 😳 let's find some good keys. for each tweet we want:  
+
+user name
+user username
+tweet date/time
+tweet contents
+user profile pic
+tweet link
+¯\(°_o)/¯
+
+oops also let's cache:  
+
+```php
+$tweets = Cache::remember('tweets::user-' . auth()->id, 5, function () {
+    return Twitter::getHomeTimeline(['count' => 20]);
+});
+
+return view('dashboard')->with('tweets', $tweets);
+```
+
+10:08pm: OK, let's look up those keys on our massive print_r page:
+
+- created_at, formatted like this: Fri Nov 10 03:03:32 +0000 2017
+- id, formatted like this: 9134809128309213
+- text
+- entities, which we'll have to use later to parse out tw.tr short links and usernames etc.
+- user
+	- name
+	- screen_name
+	- profile_image_url_https
+
+
+10:09pm: wife is home from rehearsal, done for the night
