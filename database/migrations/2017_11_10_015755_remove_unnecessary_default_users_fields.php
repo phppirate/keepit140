@@ -16,7 +16,7 @@ class RemoveUnnecessaryDefaultUsersFields extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->dropColumn('name');
             $table->dropColumn('email');
-            $table->dropColumn('password')
+            $table->dropColumn('password');
         });
     }
 
