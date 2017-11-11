@@ -436,3 +436,4 @@ OH WAIT i'm logged out let's fix that first. How do I let someone be logged in v
     </div>
 </div>
 ```
+11:06pm: did a bunch of cursor following but now rate limit exceeded so calling it for the night

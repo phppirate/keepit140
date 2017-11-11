@@ -54,12 +54,12 @@ Route::get('dashboard', function () {
             $response = Twitter::getFriends(['cursor' => $nextCursor, 'count' => 200]);
             $friends = array_merge($friends, $response->users);
             $nextCursor = $response->next_cursor;
-            echo $nextCursor . "<br>";
         }
 
-        dd($chunksOfFriends);
-        return $chunksOfFriends;
+        return $friends;
     });
+
+    // @todo getting a 504 timeout.. soo.. probably gonna have to AJAX it.
 
     $offenders = collect($friends)->map(function ($friend) {
         Cache::put('profile::profile_id-' . $friend->id, $friend, 60);
