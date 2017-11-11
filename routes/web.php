@@ -46,8 +46,19 @@ Route::get('login', function () {
 
 Route::get('dashboard', function () {
     $friends = Cache::remember('friends::user-' . auth()->id(), 15, function () {
-        // @todo: handle pagination; this is only the first 20
-        return Twitter::getFriends()->users;
+        $response = Twitter::getFriends(['count' => 200]);
+        $friends = $response->users;
+        $nextCursor = $response->next_cursor;
+
+        while ($response->next_cursor != 0) {
+            $response = Twitter::getFriends(['cursor' => $nextCursor, 'count' => 200]);
+            $friends = array_merge($friends, $response->users);
+            $nextCursor = $response->next_cursor;
+            echo $nextCursor . "<br>";
+        }
+
+        dd($chunksOfFriends);
+        return $chunksOfFriends;
     });
 
     $offenders = collect($friends)->map(function ($friend) {

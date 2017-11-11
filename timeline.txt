@@ -409,3 +409,30 @@ Launching this then gotta run
 ```
 
 10:54am: I THINK it's 20 users 20 tweets but i actually don't remember. Let's go! commit push and run.
+10:55am: Tested it. Geez i need to update it to use the token when you come back so you dont' have to re-authorize every dang time.
+10:23pm: got a couple minutes. let's beat this pagination and get some styles. First, I need to not hate looking at the header. C'monnnnn Tailwind.
+ Currently wishing I had een taking screenshots along the way tbh.
+OH WAIT i'm logged out let's fix that first. How do I let someone be logged in via twitter without making them authorize every time??
+10:27pm: ugh this is super unclear and I'm lazy. just gonna set the session to forever for now. 
+10:32pm: ok cleaned up a bit. now time to replicate the twitter profile card in flexbox.
+10:45pm: omg why did that take so long
+
+```
+<div class="my-2 py-2 border-b border-grey flex content-between">
+    <div class="mr-2 flex-no-shrink">
+        <img src="{{ $offender->profile_image_url_https }}" class="rounded-full mr-2 w-16 h-16">
+    </div>
+    <div class="flex-1">
+        <a href="{{ $offender->url }}">
+            <span class="font-bold">{{ $offender->name }}</span>
+            <span class="color-grey">{{ $offender->screen_name }}</span>
+        </a>
+        <div>
+            {{ $offender->description }}
+        </div>
+    </div>
+    <div class="font-bold mt-2 flex-shrink w-32">
+        Offenses in the last 20 tweets: {{ $offender->offenses }}
+    </div>
+</div>
+```
