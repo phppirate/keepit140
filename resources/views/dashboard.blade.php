@@ -1,7 +1,7 @@
 @extends ('layouts.master')
 
 @section('content')
-    <p>Of your 20 first returned friends, the worst offenders within their last 20 (i think) tweets</p>
+    <p>Of your, the worst offenders within their last 20 tweets</p>
 
     @foreach ($offenders as $offender)
     <div class="my-2 py-2 border-b border-grey flex content-between">
